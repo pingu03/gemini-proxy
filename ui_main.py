@@ -18,6 +18,7 @@ from PySide6.QtGui import (
     QFont,
     QPalette,
     QColor,
+    QPixmap,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -97,7 +98,7 @@ class Ui_MainWindow(object):
                 color: #1e1e2e;
             }
             QPushButton#btn_load_model:hover {
-                background-color: #cba6f7;
+                background-color: #c3f0be;
                 color: #1e1e2e;
             }
             QLabel {
@@ -370,6 +371,9 @@ class Ui_MainWindow(object):
         )
 
 
+# Maximum number of characters shown for model/file paths in the UI label.
+_MAX_PATH_DISPLAY_LEN = 45
+
 # ── MainWindow wrapper (optional standalone run) ──────────────────────────────
 
 class MainWindow(QMainWindow):
@@ -391,6 +395,28 @@ class MainWindow(QMainWindow):
         self.ui.btn_video_detect.clicked.connect(self._on_video_detect)
 
     # ------------------------------------------------------------------
+    def _get_thresholds(self):
+        """Return the current (iou, conf) threshold values from the UI."""
+        return self.ui.spin_iou.value(), self.ui.spin_conf.value()
+
+    @staticmethod
+    def _truncate_path(path):
+        """Shorten a file path for display if it exceeds the display limit."""
+        if len(path) <= _MAX_PATH_DISPLAY_LEN:
+            return path
+        # Keep the trailing portion so the filename stays visible.
+        keep = _MAX_PATH_DISPLAY_LEN - 1
+        return "…" + path[-keep:]
+
+    def _check_model_loaded(self):
+        """Show a warning and return False when no model has been loaded."""
+        if self._model is None:
+            self.ui.lbl_info.setText("⚠ 请先导入模型！")
+            self.ui.statusbar.showMessage("未加载模型，请先导入模型文件")
+            return False
+        return True
+
+    # ------------------------------------------------------------------
     def _on_load_model(self):
         path, _ = QFileDialog.getOpenFileName(
             self,
@@ -400,8 +426,7 @@ class MainWindow(QMainWindow):
         )
         if path:
             self._model = path
-            short = path if len(path) <= 45 else "…" + path[-42:]
-            self.ui.lbl_model_path.setText(short)
+            self.ui.lbl_model_path.setText(self._truncate_path(path))
             self.ui.statusbar.showMessage(f"已加载模型: {path}")
             self.ui.lbl_info.setText(f"模型已加载:\n{path}")
 
@@ -414,13 +439,10 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        if self._model is None:
-            self.ui.lbl_info.setText("⚠ 请先导入模型！")
-            self.ui.statusbar.showMessage("未加载模型，请先导入模型文件")
+        if not self._check_model_loaded():
             return
 
         # ---- Display original image ----
-        from PySide6.QtGui import QPixmap
         pixmap = QPixmap(path)
         if not pixmap.isNull():
             scaled = pixmap.scaled(
@@ -430,8 +452,7 @@ class MainWindow(QMainWindow):
             )
             self.ui.lbl_original.setPixmap(scaled)
 
-        iou  = self.ui.spin_iou.value()
-        conf = self.ui.spin_conf.value()
+        iou, conf = self._get_thresholds()
         self.ui.statusbar.showMessage(
             f"图片检测中 — IoU: {iou:.2f}  置信度: {conf:.2f} …"
         )
@@ -452,13 +473,10 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        if self._model is None:
-            self.ui.lbl_info.setText("⚠ 请先导入模型！")
-            self.ui.statusbar.showMessage("未加载模型，请先导入模型文件")
+        if not self._check_model_loaded():
             return
 
-        iou  = self.ui.spin_iou.value()
-        conf = self.ui.spin_conf.value()
+        iou, conf = self._get_thresholds()
         self.ui.statusbar.showMessage(
             f"视频检测中 — IoU: {iou:.2f}  置信度: {conf:.2f} …"
         )
